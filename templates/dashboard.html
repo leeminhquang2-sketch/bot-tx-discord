@@ -474,4 +474,225 @@
                     <h2><i class="fas fa-plus-circle"></i> Cấp tiền cho người chơi</h2>
                 </div>
                 <div class="card-body">
-                    <form
+                    <form id="addMoneyForm" class="add-money-form">
+                        <div class="form-group">
+                            <label>User ID</label>
+                            <input type="text" id="userId" placeholder="Nhập User ID" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Số tiền (MQ)</label>
+                            <input type="number" id="amount" placeholder="0" required min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Lý do</label>
+                            <input type="text" id="reason" placeholder="Lý do">
+                        </div>
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-check"></i> Cấp tiền
+                        </button>
+                    </form>
+                    <div id="addMoneyResult" class="result-message hidden"></div>
+                </div>
+            </div>
+
+            <!-- Players List -->
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-users"></i> Danh sách người chơi</h2>
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchPlayer" placeholder="Tìm kiếm...">
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>User ID</th>
+                                    <th>Số dư</th>
+                                    <th>Game</th>
+                                    <th>Thắng</th>
+                                    <th>Thua</th>
+                                    <th>Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="playersList">
+                                <tr><td colspan="6" class="loading-text">Đang tải dữ liệu...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ===== APP =====
+        class DashboardApp {
+            constructor() {
+                this.init();
+            }
+            
+            async init() {
+                this.setupEventListeners();
+                await this.loadData();
+                this.updateClock();
+                setInterval(() => this.updateClock(), 1000);
+                // Auto refresh mỗi 30 giây
+                setInterval(() => this.loadData(), 30000);
+            }
+            
+            setupEventListeners() {
+                document.getElementById('addMoneyForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await this.handleAddMoney();
+                });
+                
+                document.getElementById('searchPlayer').addEventListener('input', (e) => {
+                    this.filterPlayers(e.target.value);
+                });
+            }
+            
+            async loadData() {
+                try {
+                    const [stats, players] = await Promise.all([
+                        this.fetchStats(),
+                        this.fetchPlayers()
+                    ]);
+                    
+                    this.updateStats(stats);
+                    this.renderPlayers(players);
+                } catch (error) {
+                    console.error('Lỗi tải dữ liệu:', error);
+                }
+            }
+            
+            async fetchStats() {
+                const response = await fetch('/api/stats');
+                if (!response.ok) throw new Error('Failed to fetch stats');
+                return response.json();
+            }
+            
+            async fetchPlayers() {
+                const response = await fetch('/api/players');
+                if (!response.ok) throw new Error('Failed to fetch players');
+                return response.json();
+            }
+            
+            updateStats(stats) {
+                document.getElementById('totalUsers').textContent = stats.totalUsers || 0;
+                document.getElementById('totalBalance').textContent = 
+                    `${(stats.totalBalance || 0).toLocaleString()} MQ`;
+                document.getElementById('totalGames').textContent = stats.totalGames || 0;
+                document.getElementById('totalTransactions').textContent = stats.totalTransactions || 0;
+            }
+            
+            renderPlayers(players) {
+                const tbody = document.getElementById('playersList');
+                
+                if (!players || players.length === 0) {
+                    tbody.innerHTML = `
+                        <tr><td colspan="6" style="text-align:center;padding:40px;color:#a0aec0;">
+                            Chưa có người chơi nào
+                        </td></tr>
+                    `;
+                    return;
+                }
+                
+                tbody.innerHTML = players.map(player => `
+                    <tr>
+                        <td><code>${player.userId.slice(0, 8)}...</code></td>
+                        <td><strong>${player.balance.toLocaleString()} MQ</strong></td>
+                        <td>${player.gamesPlayed || 0}</td>
+                        <td>${(player.totalWon || 0).toLocaleString()} MQ</td>
+                        <td>${(player.totalLost || 0).toLocaleString()} MQ</td>
+                        <td>
+                            <button class="btn-small" onclick="app.quickAdd('${player.userId}')">
+                                <i class="fas fa-plus"></i> Cấp
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+            
+            filterPlayers(searchTerm) {
+                const rows = document.querySelectorAll('#playersList tr');
+                const term = searchTerm.toLowerCase();
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(term) ? '' : 'none';
+                });
+            }
+            
+            async handleAddMoney() {
+                const userId = document.getElementById('userId').value.trim();
+                const amount = parseInt(document.getElementById('amount').value);
+                const reason = document.getElementById('reason').value.trim() || 'Admin cấp tiền';
+                const resultDiv = document.getElementById('addMoneyResult');
+                
+                if (!userId || !amount || amount <= 0) {
+                    resultDiv.className = 'result-message error';
+                    resultDiv.textContent = '⚠️ Vui lòng nhập đầy đủ thông tin';
+                    resultDiv.classList.remove('hidden');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/add-money', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId, amount, reason })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        resultDiv.className = 'result-message success';
+                        resultDiv.textContent = `✅ Thành công! Đã cấp ${amount.toLocaleString()} MQ`;
+                        resultDiv.classList.remove('hidden');
+                        
+                        document.getElementById('userId').value = '';
+                        document.getElementById('amount').value = '';
+                        document.getElementById('reason').value = '';
+                        
+                        setTimeout(() => this.loadData(), 1000);
+                    } else {
+                        resultDiv.className = 'result-message error';
+                        resultDiv.textContent = `❌ ${data.error || 'Lỗi!'}`;
+                        resultDiv.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    resultDiv.className = 'result-message error';
+                    resultDiv.textContent = `❌ Lỗi kết nối!`;
+                    resultDiv.classList.remove('hidden');
+                }
+            }
+            
+            quickAdd(userId) {
+                document.getElementById('userId').value = userId;
+                document.getElementById('amount').focus();
+            }
+            
+            updateClock() {
+                const now = new Date();
+                document.getElementById('currentTime').textContent = 
+                    now.toLocaleString('vi-VN', {
+                        weekday: 'long',
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
+            }
+        }
+        
+        // Khởi tạo app
+        let app;
+        document.addEventListener('DOMContentLoaded', () => {
+            app = new DashboardApp();
+        });
+    </script>
+</body>
+</html>
