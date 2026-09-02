@@ -1,0 +1,40 @@
+# Data files
+bot/data/
+bot/*.json
+bot/*.log
+bot/secrets.json
+bot/database.json
+bot/config.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Session files
+bot/data/sessions/
